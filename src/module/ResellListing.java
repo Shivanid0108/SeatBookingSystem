@@ -3,111 +3,87 @@ package module;
 import java.math.BigDecimal;
 
 /**
- * ResellListing represents a seat that a ClientUser has listed for resale.
- * 
- * REAL WORLD ANALOGY: Like StubHub or Ticketmaster resale — you bought a ticket
- * but can't go, so you list it for others to buy, sometimes at a discount.
- * 
+ * WHAT: Represents a seat that a ClientUser has listed for resale on the
+ * marketplace.
+ *
+ * ANALOGY: Like StubHub — you bought a ticket but can't go, so you list it for
+ * others.
+ *
  * FROM ASSIGNMENT: "Users can resell the seat by posting it in a sell list,
  * which includes the seat's business type, seat number, cost, and discount
  * ratio."
- * 
- * WHY separate from Booking? A ResellListing IS created FROM a Booking, but
- * it's a different concept: - Booking = "I have reserved this seat" -
- * ResellListing = "I want to sell my reservation to someone else"
- * 
- * When a ResellListing is created: 1. Original Booking status → RESOLD 2. New
- * ResellListing created with the seat details 3. Other users can see and buy
- * from the resell list
- * 
- * RELATIONSHIPS: ResellListing HAS-ONE Booking (original booking being resold)
- * ResellListing HAS-ONE Seat (the seat being resold) ResellListing HAS-ONE
- * ClientUser (the seller)
- * 
+ *
+ * WHY SEPARATE FROM BOOKING? A Booking = "I have reserved this seat" A
+ * ResellListing = "I want to sell my reservation to someone else" When created:
+ * original Booking.status → RESOLD, new ResellListing created. When bought:
+ * ResellListing removed, new Booking created for buyer.
+ *
+ * RELATIONSHIPS: - ResellListing HAS-ONE Booking (original booking being
+ * resold) - ResellListing HAS-ONE Seat (the seat being resold — convenience
+ * reference) - ResellListing HAS-ONE ClientUser (the seller)
+ *
  * SPRING BOOT NOTE: - @Entity - @ManyToOne on booking, seat, seller
  */
 public class ResellListing {
 
-	/**
-	 * WHY Long id? Spring Boot JPA standard.
-	 */
 	private Long id;
 
 	/**
-	 * WHY store the original Booking? We need to know WHICH booking is being
-	 * resold. When someone buys from resell list: 1. Original
-	 * booking.setStatus(RESOLD) — already done when listing created 2. New Booking
-	 * created for the buyer 3. This ResellListing is removed from the list
+	 * WHY store the original Booking? Need to know WHICH booking is being resold.
+	 * When someone buys: original booking.status = RESOLD (already done), new
+	 * Booking created for buyer, this ResellListing removed.
 	 */
 	private Booking booking;
 
 	/**
-	 * WHY store Seat separately if we have Booking? Convenience — quick access to
-	 * seat details without going through booking. booking.getSeat() works too, but
-	 * direct reference is cleaner.
-	 * 
-	 * From assignment: "sell list includes seat's business type, seat number"
+	 * WHY store Seat separately if we have Booking? Convenience — quick access
+	 * without chaining: resellListing.getSeat() vs
+	 * resellListing.getBooking().getSeat() Also: ResellService stores listings by
+	 * zone → needs seat.getZone() frequently.
 	 */
 	private Seat seat;
 
 	/**
-	 * WHY store seller separately if we have Booking? Same reason — quick access.
-	 * Also: when buyer messages seller, we need the seller reference directly. From
-	 * assignment: "Users can communicate via messaging and bargain for seat prices"
+	 * WHY store seller separately if we have Booking? Quick access for: "can't buy
+	 * your own listing" check. Also: when buyer messages seller, direct reference
+	 * needed.
 	 */
 	private ClientUser seller;
 
 	/**
 	 * WHY String businessType? From assignment: "sell list includes the seat's
-	 * business type" Business type = what kind of venue (Cinema, Restaurant,
-	 * Conference Room) This comes from Venue.getType() Stored here for quick
-	 * display without loading the whole Venue.
+	 * business type" Business type = what kind of venue (Cinema, Restaurant, etc.)
+	 * Stored here for quick display without loading the whole Venue.
 	 */
 	private String businessType;
 
 	/**
-	 * WHY BigDecimal resellPrice? The resell price might be different from the
-	 * original calculatedPrice. Seller might add markup or give discount.
-	 * 
-	 * In Spring Boot DB: DECIMAL(10,2) column.
+	 * WHY BigDecimal resellPrice? Seller sets their own price — may differ from
+	 * original calculatedPrice. Seller might mark up (rare) or discount (common to
+	 * sell quickly).
 	 */
 	private BigDecimal resellPrice;
 
 	/**
 	 * WHY BigDecimal discountRatio? From assignment: "sell list includes cost and
-	 * discount ratio" discount ratio = how much discount the seller is offering
-	 * Example: 0.10 = 10% discount from original price
-	 * 
-	 * resellPrice = originalPrice × (1 - discountRatio)
+	 * discount ratio" discountRatio = 0.10 means 10% discount from original price.
+	 * Range: 0.00 (no discount) to 1.00 (100% discount = free).
 	 */
 	private BigDecimal discountRatio;
 
 	/**
-	 * Constructor — called by ResellService when a client lists a seat for resale.
-	 * 
-	 * WHY these parameters? - booking: the original booking being resold - seller:
-	 * who is selling (from the booking) - resellPrice: what price they want to sell
-	 * at - discountRatio: what discount they're offering
-	 * 
-	 * businessType and seat are extracted from booking automatically.
+	 * Constructor — called by ResellService.resellSeat(). seat and businessType
+	 * extracted from booking automatically.
 	 */
 	public ResellListing(Booking booking, ClientUser seller, BigDecimal resellPrice, BigDecimal discountRatio) {
 		this.booking = booking;
 		this.seller = seller;
 		this.resellPrice = resellPrice;
 		this.discountRatio = discountRatio;
-
-		/**
-		 * WHY extract these from booking? Convenience fields — stored directly for
-		 * quick access. Avoids chaining:
-		 * resellListing.getBooking().getSeat().getSeatLabel() Instead:
-		 * resellListing.getSeat().getSeatLabel()
-		 */
 		this.seat = booking.getSeat();
-		this.businessType = ""; // will be set from Venue.getType() in ResellService
+		this.businessType = ""; // set by ResellService from Venue.getType()
 	}
 
-	// Getters — ResellListing fields don't change after creation
 	public Long getId() {
 		return id;
 	}
@@ -128,30 +104,27 @@ public class ResellListing {
 		return businessType;
 	}
 
-	public void setBusinessType(String businessType) {
-		this.businessType = businessType;
-	}
-
 	public BigDecimal getResellPrice() {
 		return resellPrice;
-	}
-
-	// Setter for price — seller might negotiate and update price
-	public void setResellPrice(BigDecimal resellPrice) {
-		this.resellPrice = resellPrice;
 	}
 
 	public BigDecimal getDiscountRatio() {
 		return discountRatio;
 	}
 
-	/**
-	 * WHY toString()? For displaying listing details to users browsing the resell
-	 * market.
-	 */
+	public void setBusinessType(String businessType) {
+		this.businessType = businessType;
+	}
+
+	// Seller might negotiate price — update if buyer makes offer
+	public void setResellPrice(BigDecimal resellPrice) {
+		this.resellPrice = resellPrice;
+	}
+
 	@Override
 	public String toString() {
-		return "ResellListing {" + "Seat: " + seat.getSeatLabel() + ", Type: " + businessType + ", Price: "
-				+ resellPrice + ", Discount: " + discountRatio + "%" + ", Seller: " + seller.getName() + "}";
+		return "ResellListing { Seat: " + seat.getSeatLabel() + " | Type: " + businessType + " | Price: $" + resellPrice
+				+ " | Discount: " + discountRatio.multiply(new BigDecimal("100")) + "%" + " | Seller: "
+				+ seller.getName() + " }";
 	}
 }
